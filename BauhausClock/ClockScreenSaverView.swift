@@ -56,11 +56,29 @@ class ClockScreenSaverView: ScreenSaverView {
         super.init(frame: frame, isPreview: isPreview)
         // Use a fast timer for smooth animation (target ~60fps)
         animationTimeInterval = 1.0 / 60.0
+
+        // The Options… sheet runs in a separate process; listen for its commit
+        // notification so we re-read settings and repaint immediately on OK.
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(configChanged(_:)),
+            name: ConfigureSheetController.configChangedNotification,
+            object: nil
+        )
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) not supported")
+    }
+
+    deinit {
+        DistributedNotificationCenter.default().removeObserver(self)
+    }
+
+    @objc private func configChanged(_ note: Notification) {
+        defaults?.synchronize()
+        setNeedsDisplay(bounds)
     }
 
     // MARK: - Lifecycle
@@ -116,6 +134,8 @@ class ClockScreenSaverView: ScreenSaverView {
 
     // MARK: - Configure Sheet
 
-    override var hasConfigureSheet: Bool { false }
-    override var configureSheet: NSWindow? { nil }
+    private lazy var sheetController = ConfigureSheetController(defaults: defaults)
+
+    override var hasConfigureSheet: Bool { true }
+    override var configureSheet: NSWindow? { sheetController.window }
 }

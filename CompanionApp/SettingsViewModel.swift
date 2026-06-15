@@ -1,4 +1,5 @@
 import SwiftUI
+import ScreenSaver
 
 class SettingsViewModel: ObservableObject {
     private let defaults: UserDefaults
@@ -14,7 +15,13 @@ class SettingsViewModel: ObservableObject {
     @Published var dialScrollOffset: Int = 0
 
     init() {
-        let d = UserDefaults(suiteName: "com.bauhausclk.BauhausClock") ?? .standard
+        // Write to the SAME store the screensaver reads from. The .saver reads via
+        // ScreenSaverDefaults(forModuleWithName: <saver bundle id>), which is a
+        // distinct backing store from UserDefaults(suiteName:) even when the names
+        // match — so we must use ScreenSaverDefaults here too, or OK never reaches
+        // the screensaver.
+        let moduleName = "com.bauhausclk.BauhausClock" // = saver's CFBundleIdentifier
+        let d: UserDefaults = ScreenSaverDefaults(forModuleWithName: moduleName) ?? .standard
         d.register(defaults: [
             "appearance": "night",
             "dial": "Noir",
