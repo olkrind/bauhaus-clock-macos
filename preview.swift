@@ -13,6 +13,7 @@ class ClockView: NSView {
     var showSeconds = true
     var night = false
     var lumeName = "Tritium Green"
+    var movement = "Mechanical"
 
     override var isFlipped: Bool { true }
 
@@ -28,7 +29,8 @@ class ClockView: NSView {
             now: Date(),
             clockSize: clockSize,
             showSeconds: showSeconds,
-            night: night
+            night: night,
+            movement: movement
         )
     }
 
@@ -52,6 +54,7 @@ class SettingsController: NSObject {
     private var dialPopup: NSPopUpButton!
     private var lumePopup: NSPopUpButton!
     private var sizePopup: NSPopUpButton!
+    private var movementPopup: NSPopUpButton!
     private var nightCheck: NSButton!
     private var secondsCheck: NSButton!
     private var lumeLabel: NSTextField!
@@ -61,7 +64,7 @@ class SettingsController: NSObject {
         self.window = window
 
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 260, height: 240),
+            contentRect: NSRect(x: 0, y: 0, width: 260, height: 280),
             styleMask: [.titled, .closable, .utilityWindow, .hudWindow],
             backing: .buffered,
             defer: false
@@ -81,7 +84,7 @@ class SettingsController: NSObject {
         content.autoresizingMask = [.width, .height]
         panel.contentView = content
 
-        var y: CGFloat = 200
+        var y: CGFloat = 240
 
         // Dial
         y = addRow(to: content, label: "Dial", y: y) { frame in
@@ -100,6 +103,16 @@ class SettingsController: NSObject {
             popup.target = self
             popup.action = #selector(sizeChanged(_:))
             self.sizePopup = popup
+            return popup
+        }
+
+        // Movement
+        y = addRow(to: content, label: "Move", y: y) { frame in
+            let popup = NSPopUpButton(frame: frame, pullsDown: false)
+            popup.addItems(withTitles: ["Quartz", "Mechanical", "Digital"])
+            popup.target = self
+            popup.action = #selector(self.movementChanged(_:))
+            self.movementPopup = popup
             return popup
         }
 
@@ -151,6 +164,7 @@ class SettingsController: NSObject {
     private func syncFromClockView() {
         dialPopup.selectItem(withTitle: clockView.dialName)
         sizePopup.selectItem(withTitle: clockView.clockSize)
+        movementPopup.selectItem(withTitle: clockView.movement)
         secondsCheck.state = clockView.showSeconds ? .on : .off
         nightCheck.state = clockView.night ? .on : .off
         lumePopup.selectItem(withTitle: clockView.lumeName)
@@ -179,6 +193,11 @@ class SettingsController: NSObject {
 
     @objc func sizeChanged(_ sender: NSPopUpButton) {
         clockView.clockSize = sender.titleOfSelectedItem ?? "Classic"
+        clockView.applySettings()
+    }
+
+    @objc func movementChanged(_ sender: NSPopUpButton) {
+        clockView.movement = sender.titleOfSelectedItem ?? "Mechanical"
         clockView.applySettings()
     }
 
@@ -283,6 +302,7 @@ struct PreviewApp {
         }
         if args.contains("--no-seconds") { clockView.showSeconds = false }
         if args.contains("--compact") { clockView.clockSize = "Compact" }
+        if let mv = argValue("--movement") { clockView.movement = mv }
         clockView.applySettings()
 
         // Settings panel + toolbar gear button

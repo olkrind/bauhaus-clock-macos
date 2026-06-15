@@ -40,6 +40,7 @@ swiftc \
   -framework AppKit \
   -framework SwiftUI \
   -framework CoreText \
+  -framework ScreenSaver \
   -O \
   "${SWIFT_FILES[@]}"
 

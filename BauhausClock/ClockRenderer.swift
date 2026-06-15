@@ -110,6 +110,9 @@ final class ClockRenderer {
         // ── Hour Indices ──
         drawHourIndices(ctx, cx: cx, cy: cy, fR: fR, pal: pal, night: night, scale: scale)
 
+        // ── Minute Numerals (outer ring: 60, 05, 10 … 55) ──
+        drawMinuteNumerals(ctx, cx: cx, cy: cy, fR: fR, sz: sz * scale, pal: pal, night: night)
+
         // ── Numerals ──
         drawNumerals(ctx, cx: cx, cy: cy, fR: fR, sz: sz * scale, pal: pal, night: night)
 
@@ -147,8 +150,8 @@ final class ClockRenderer {
         for i in 0..<60 {
             if i % 5 == 0 { continue }
             let a = CGFloat(i) * 6
-            let p1 = polar(cx: cx, cy: cy, angleDeg: a, radius: fR * 0.94)
-            let p2 = polar(cx: cx, cy: cy, angleDeg: a, radius: fR * 0.98)
+            let p1 = polar(cx: cx, cy: cy, angleDeg: a, radius: fR * 0.84)
+            let p2 = polar(cx: cx, cy: cy, angleDeg: a, radius: fR * 0.89)
             ctx.move(to: p1)
             ctx.addLine(to: p2)
         }
@@ -160,12 +163,12 @@ final class ClockRenderer {
 
     static func drawHourIndices(_ ctx: CGContext, cx: CGFloat, cy: CGFloat, fR: CGFloat,
                                 pal: ClockPalette, night: Bool, scale: CGFloat) {
-        let len = fR * 0.12
+        let len = fR * 0.085
         let w: CGFloat = 4.5 * scale
 
         for i in 0..<12 {
             let a = CGFloat(i) * 30
-            let ctr = polar(cx: cx, cy: cy, angleDeg: a, radius: fR * 0.91)
+            let ctr = polar(cx: cx, cy: cy, angleDeg: a, radius: fR * 0.80)
             let rad = (a) * .pi / 180
 
             ctx.saveGState()
@@ -174,8 +177,8 @@ final class ClockRenderer {
 
             // Shadow (positive height = down in flipped coords)
             if !night {
-                ctx.setShadow(offset: CGSize(width: 0.8, height: 1.5), blur: 2.4,
-                              color: NSColor.black.withAlphaComponent(0.3).cgColor)
+                ctx.setShadow(offset: CGSize(width: 0.5, height: 1.0), blur: 1.6,
+                              color: NSColor.black.withAlphaComponent(0.22).cgColor)
             } else {
                 // Night glow
                 if let glow = pal.glow {
@@ -205,16 +208,16 @@ final class ClockRenderer {
 
     static func drawNumerals(_ ctx: CGContext, cx: CGFloat, cy: CGFloat, fR: CGFloat,
                              sz: CGFloat, pal: ClockPalette, night: Bool) {
-        let fontSize = sz * 0.052
+        let fontSize = sz * 0.046
         let color = night ? (pal.glow ?? pal.num) : pal.num
 
         // Load Jost or fallback to system font
-        let fontName = "Jost-Medium"
+        let fontName = "Jost-Regular"
         let font: CTFont
         if let f = CTFontCreateWithName(fontName as CFString, fontSize, nil) as CTFont? {
             font = f
         } else {
-            font = CTFontCreateWithName("HelveticaNeue-Medium" as CFString, fontSize, nil)
+            font = CTFontCreateWithName("HelveticaNeue" as CFString, fontSize, nil)
         }
 
         let attrs: [NSAttributedString.Key: Any] = [
@@ -225,7 +228,7 @@ final class ClockRenderer {
         for i in 0..<12 {
             let n = i == 0 ? 12 : i
             let a = CGFloat(i) * 30
-            let np = polar(cx: cx, cy: cy, angleDeg: a, radius: fR * 0.74)
+            let np = polar(cx: cx, cy: cy, angleDeg: a, radius: fR * 0.65)
 
             let str = NSAttributedString(string: "\(n)", attributes: attrs)
             let line = CTLineCreateWithAttributedString(str)
@@ -245,6 +248,53 @@ final class ClockRenderer {
                                        y: -bounds.height / 2 - bounds.origin.y)
             CTLineDraw(line, ctx)
             ctx.restoreGState()
+            ctx.restoreGState()
+        }
+    }
+
+    // MARK: - Minute Numerals (outer rotated ring)
+
+    static func drawMinuteNumerals(_ ctx: CGContext, cx: CGFloat, cy: CGFloat, fR: CGFloat,
+                                   sz: CGFloat, pal: ClockPalette, night: Bool) {
+        let fontSize = sz * 0.034
+        let base = night ? (pal.glow ?? pal.num) : pal.num
+        let color = base.withAlphaComponent(night ? 0.45 : 0.6)
+
+        let fontName = "Jost-Medium"
+        let font: CTFont = (CTFontCreateWithName(fontName as CFString, fontSize, nil) as CTFont?)
+            ?? CTFontCreateWithName("HelveticaNeue-Medium" as CFString, fontSize, nil)
+
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color,
+        ]
+
+        let radius = fR * 0.99
+        for i in stride(from: 0, to: 60, by: 5) {
+            let label = i == 0 ? "60" : String(format: "%02d", i)
+            let a = CGFloat(i) * 6
+            let rad = a * .pi / 180
+            let np = polar(cx: cx, cy: cy, angleDeg: a, radius: radius)
+
+            let str = NSAttributedString(string: label, attributes: attrs)
+            let line = CTLineCreateWithAttributedString(str)
+            let bounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
+
+            ctx.saveGState()
+            if night, let glow = pal.glow {
+                ctx.setShadow(offset: .zero, blur: 3, color: glow.withAlphaComponent(0.4).cgColor)
+            }
+            // Rotate tangentially: "60" upright at top, numbers fan around the rim.
+            // Flip the bottom half (minutes 20–40) so they stay upright like the
+            // original ("30" reads right-way-up, not upside down).
+            ctx.translateBy(x: np.x, y: np.y)
+            var rot = rad
+            if a > 90, a < 270 { rot -= .pi }
+            ctx.rotate(by: rot)
+            ctx.scaleBy(x: 1, y: -1)
+            ctx.textPosition = CGPoint(x: -bounds.width / 2 - bounds.origin.x,
+                                       y: -bounds.height / 2 - bounds.origin.y)
+            CTLineDraw(line, ctx)
             ctx.restoreGState()
         }
     }
@@ -370,28 +420,68 @@ final class ClockRenderer {
 
     // MARK: - Grain Texture
 
+    // Cached grain bitmap — the noise is static, so generate it once per size
+    // instead of filling hundreds of thousands of 3×3 rects every frame.
+    private static var grainCache: (w: Int, h: Int, image: CGImage)?
+
     static func drawGrain(_ ctx: CGContext, size: CGSize, pal: ClockPalette) {
-        // Lightweight noise approximation using CIFilter would be heavy;
-        // use a pre-seeded random dot pattern for subtle grain
+        let w = Int(size.width.rounded())
+        let h = Int(size.height.rounded())
+        guard w > 0, h > 0 else { return }
+
+        let image: CGImage
+        if let c = grainCache, c.w == w, c.h == h {
+            image = c.image
+        } else if let img = makeGrainImage(width: w, height: h) {
+            image = img
+            grainCache = (w, h, img)
+        } else {
+            return
+        }
+
         ctx.saveGState()
         ctx.setBlendMode(.softLight)
         ctx.setAlpha(0.08)
+        ctx.draw(image, in: CGRect(origin: .zero, size: size))
+        ctx.restoreGState()
+    }
 
-        let step: CGFloat = 3
-        var x: CGFloat = 0
-        // Simple deterministic noise
+    /// Builds the deterministic grain as a grayscale bitmap (same pattern as before:
+    /// pre-seeded LCG noise in 3×3 blocks, column-major).
+    private static func makeGrainImage(width: Int, height: Int) -> CGImage? {
+        let bytesPerRow = width
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: width * height)
+        defer { buffer.deallocate() }
+
+        let step = 3
         var seed: UInt32 = 7
-        while x < size.width {
-            var y: CGFloat = 0
-            while y < size.height {
+        var x = 0
+        while x < width {
+            var y = 0
+            while y < height {
                 seed = seed &* 1103515245 &+ 12345
-                let val = CGFloat((seed >> 16) & 0xFF) / 255.0
-                ctx.setFillColor(gray: val, alpha: 1)
-                ctx.fill(CGRect(x: x, y: y, width: step, height: step))
+                let val = UInt8((seed >> 16) & 0xFF)
+                let xEnd = min(x + step, width)
+                let yEnd = min(y + step, height)
+                var yy = y
+                while yy < yEnd {
+                    let row = yy * bytesPerRow
+                    var xx = x
+                    while xx < xEnd {
+                        buffer[row + xx] = val
+                        xx += 1
+                    }
+                    yy += 1
+                }
                 y += step
             }
             x += step
         }
-        ctx.restoreGState()
+
+        guard let bctx = CGContext(data: buffer, width: width, height: height,
+                                   bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+                                   space: CGColorSpaceCreateDeviceGray(),
+                                   bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+        return bctx.makeImage()
     }
 }

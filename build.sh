@@ -28,6 +28,7 @@ echo "→ Step 2: Compiling Swift..."
 SWIFT_FILES=(
   "$PROJECT_DIR/BauhausClock/Palettes.swift"
   "$PROJECT_DIR/BauhausClock/ClockRenderer.swift"
+  "$PROJECT_DIR/BauhausClock/ConfigureSheetController.swift"
   "$PROJECT_DIR/BauhausClock/ClockScreenSaverView.swift"
 )
 
